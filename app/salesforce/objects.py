@@ -9,7 +9,8 @@ CRM_OBJECTS = [
 
 TRANSCRIPT_OBJECTS = [
     "Task",
-    "Activity"
+    #"Activity"
+    "Event"
 ]
 
 DOCUMENT_OBJECTS = [

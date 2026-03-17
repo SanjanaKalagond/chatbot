@@ -1,5 +1,5 @@
-from app.router.query_router import route_query
+from app.llm.orchestrator import process_complex_query
 
-def chat(question):
-    routed = route_query(question)
-    return str(routed["data"])
+def chat(question, history=[]):
+    result = process_complex_query(question, history)
+    return result

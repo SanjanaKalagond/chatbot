@@ -8,4 +8,6 @@ def fetch_live_from_sf(soql):
     params = {"q": soql}
     response = requests.get(url, headers=headers, params=params)
     data = response.json()
+    if "errorCode" in data:
+        return []
     return data.get("records", [])

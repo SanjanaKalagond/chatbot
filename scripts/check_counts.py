@@ -1,65 +1,60 @@
-from app.salesforce.auth import get_salesforce_token
-import requests
-import sys
+from sqlalchemy import text
+from app.database.postgres import engine
 
-OBJECTS = [
-    "Account",
-    "Contact",
-    "Opportunity",
-    "Order",
-    "OrderItem",
-    "Case",
-    "Task",
-    "Activity",
-    "ContentVersion",
-    "ContentDocument",
-    "ContentDocumentLink"
-]
+def check_counts():
+    tables = [
+        "account",
+        "contact",
+        "opportunity",
+        "orders",
+        "order_item",
+        "case_table",
+        "transcripts",
+        "documents",
+        "salesforce_objects",
+        "sync_metadata"
+    ]
 
+    print("\n=== DATABASE ROW COUNTS ===\n")
+    with engine.connect() as conn:
+        for table in tables:
+            result = conn.execute(text(f"SELECT COUNT(*) FROM {table}"))
+            count = result.scalar()
+            print(f"{table:<25} {count:>10} rows")
 
-def check_all_counts():
+    print("\n=== TRANSCRIPT BREAKDOWN ===\n")
+    with engine.connect() as conn:
+        result = conn.execute(text("""
+            SELECT object_type, COUNT(*) as count
+            FROM transcripts
+            GROUP BY object_type
+            ORDER BY count DESC
+        """))
+        for row in result:
+            print(f"{row[0]:<25} {row[1]:>10} rows")
 
-    access_token, instance_url = get_salesforce_token()
+    print("\n=== SENTIMENT BREAKDOWN ===\n")
+    with engine.connect() as conn:
+        result = conn.execute(text("""
+            SELECT sentiment, COUNT(*) as count
+            FROM transcripts
+            GROUP BY sentiment
+            ORDER BY count DESC
+        """))
+        for row in result:
+            print(f"{row[0]:<25} {row[1]:>10} rows")
 
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
-    }
+    print("\n=== SYNC METADATA ===\n")
+    with engine.connect() as conn:
+        result = conn.execute(text("""
+            SELECT object_name, last_sync_time
+            FROM sync_metadata
+            ORDER BY object_name
+        """))
+        for row in result:
+            print(f"{row[0]:<25} last synced: {row[1]}")
 
-    query_url = f"{instance_url}/services/data/v59.0/query"
-
-    print("\nFetching Salesforce Object Counts\n")
-    sys.stdout.flush()
-
-    for obj in OBJECTS:
-
-        try:
-
-            soql = f"SELECT COUNT() FROM {obj}"
-
-            response = requests.get(
-                query_url,
-                headers=headers,
-                params={"q": soql},
-                timeout=30
-            )
-
-            if response.status_code != 200:
-                print(f"{obj}: ERROR {response.status_code} → {response.text}")
-                continue
-
-            data = response.json()
-
-            if "totalSize" in data:
-                print(f"{obj}: {data['totalSize']}")
-            else:
-                print(f"{obj}: Unexpected response → {data}")
-
-        except Exception as e:
-            print(f"{obj}: Failed → {str(e)}")
-
-        sys.stdout.flush()
-
+    print()
 
 if __name__ == "__main__":
-    check_all_counts()
+    check_counts()
