@@ -31,6 +31,7 @@ with st.sidebar:
                 response = requests.post(f"{API_URL}/upload", files=files, timeout=60)
                 if response.status_code == 200:
                     st.success(f"Uploaded: {uploaded_file.name}")
+                    st.session_state.doc_uploaded = True
                 else:
                     st.error("Upload failed.")
             except requests.exceptions.ConnectionError:
@@ -48,34 +49,54 @@ with st.sidebar:
     st.markdown("---")
     if st.button("Clear Chat"):
         st.session_state.messages = []
+        st.session_state.doc_uploaded = False
         st.rerun()
+    if st.button("Clear Session Documents"):
+        try:
+            requests.post(f"{API_URL}/clear_session_docs", timeout=10)
+            st.session_state.doc_uploaded = False
+            st.success("Session documents cleared.")
+        except Exception:
+            st.error("Could not clear session documents.")
 
-st.title("Ask your Chatbot")
+st.title("Ask your CRM")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "doc_uploaded" not in st.session_state:
+    st.session_state.doc_uploaded = False
+if "last_question" not in st.session_state:
+    st.session_state.last_question = ""
+if "last_answer" not in st.session_state:
+    st.session_state.last_answer = ""
+
+def render_chart(rows):
+    try:
+        df = pd.DataFrame(rows)
+        df = df.dropna(axis=1, how="all")
+        df = df.dropna(subset=[df.columns[0]])
+        df = df[df[df.columns[0]] != ""]
+        numeric_cols = df.select_dtypes(include="number").columns.tolist()
+        text_cols = df.select_dtypes(exclude="number").columns.tolist()
+        if numeric_cols and len(df) > 1:
+            index_col = text_cols[0] if text_cols else df.columns[0]
+            st.bar_chart(df.set_index(index_col)[numeric_cols])
+        with st.expander("View Table"):
+            st.dataframe(df, use_container_width=True)
+    except Exception:
+        pass
 
 for m in st.session_state.messages:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
         if m.get("chart_data"):
-            try:
-                df = pd.DataFrame(m["chart_data"])
-                df = df.dropna(axis=1, how="all")
-                numeric_cols = df.select_dtypes(include="number").columns.tolist()
-                text_cols = df.select_dtypes(exclude="number").columns.tolist()
-                if numeric_cols and len(df) > 1:
-                    index_col = text_cols[0] if text_cols else df.columns[0]
-                    st.bar_chart(df.set_index(index_col)[numeric_cols])
-                with st.expander("View Table"):
-                    st.dataframe(df, width="stretch")
-            except Exception:
-                pass
+            render_chart(m["chart_data"])
 
-prompt = st.chat_input("Ask about your CRM data...")
+prompt = st.chat_input("Ask your query")
 
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
+    st.session_state.last_question = prompt
 
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -94,6 +115,7 @@ if prompt:
                 data = response.json()
                 answer = data.get("answer", "No answer returned.")
                 visual_data = data.get("visual_data")
+                st.session_state.last_answer = answer
 
                 st.markdown(answer)
 
@@ -106,24 +128,34 @@ if prompt:
                         st.caption("Data fetched live from Salesforce — syncing to database in background")
                     elif source == "not_found":
                         st.caption("No data found in database or Salesforce")
+                    elif source == "hybrid":
+                        st.caption("Hybrid query — CRM + Transcripts")
 
                     if "rows" in visual_data and visual_data["rows"]:
-                        try:
-                            df = pd.DataFrame(visual_data["rows"])
-                            df = df.dropna(axis=1, how="all")
-                            numeric_cols = df.select_dtypes(include="number").columns.tolist()
-                            text_cols = df.select_dtypes(exclude="number").columns.tolist()
-                            if numeric_cols and len(df) > 1:
-                                index_col = text_cols[0] if text_cols else df.columns[0]
-                                st.bar_chart(df.set_index(index_col)[numeric_cols])
-                            with st.expander("View Table"):
-                                st.dataframe(df, width="stretch")
-                        except Exception:
-                            pass
+                        render_chart(visual_data["rows"])
 
                     if "sql" in visual_data and visual_data["sql"] != "customer_360":
                         with st.expander("View SQL"):
                             st.code(visual_data["sql"], language="sql")
+
+                if st.session_state.doc_uploaded:
+                    if st.button("Save this interaction"):
+                        try:
+                            save_response = requests.post(
+                                f"{API_URL}/save_interaction",
+                                json={
+                                    "question": st.session_state.last_question,
+                                    "answer": st.session_state.last_answer
+                                },
+                                timeout=30
+                            )
+                            save_data = save_response.json()
+                            if save_data.get("status") == "saved":
+                                st.success(f"Saved to S3: {save_data.get('folder')}")
+                            else:
+                                st.error("Save failed.")
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
 
             except requests.exceptions.ConnectionError:
                 answer = "Cannot connect to backend. Make sure FastAPI is running on port 8000."

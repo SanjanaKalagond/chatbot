@@ -30,12 +30,14 @@ def load_index():
         return index, metadata
     return None, []
 
-def search(query, k=3):
+def search(query, k=10):
     index, metadata = load_index()
     if index is None:
         return []
     m = get_model()
     q_emb = m.encode([query]).astype("float32")
+    total = index.ntotal
+    k = min(k, total)
     D, I = index.search(q_emb, k)
     results = []
     for idx in I[0]:

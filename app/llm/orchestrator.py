@@ -1,6 +1,7 @@
 import json
 from app.llm.gemini_client import generate_response
-from services.sql_service import handle_sql_query, generate_sql
+from services.sql_service import handle_sql_query
+from app.llm.sql_generator import generate_sql
 from services.transcript_service import handle_transcript_query
 from services.rag_service import handle_rag_query
 from services.customer_service import get_customer_360
@@ -48,7 +49,7 @@ def is_customer_360_query(query):
             return True
     return False
 
-def process_complex_query(user_query, history=[], temp_pdf_context=None):
+def process_complex_query(user_query, history=[], temp_pdf_context=None, session_index=None, session_metadata=None):
 
     if is_customer_360_query(user_query):
         customer_name = extract_customer_name(user_query)
@@ -146,8 +147,21 @@ User question:
             results["transcript_data"] = transcript_data
 
         elif source == "documents":
-            rag_data = handle_rag_query(plan["query"])
-            results["doc_data"] = rag_data["context"]
+            if session_index is not None and session_metadata:
+                from app.rag.retrieval import get_model
+                import numpy as np
+                m = get_model()
+                q_emb = m.encode([plan["query"]]).astype("float32")
+                k = min(10, session_index.ntotal)
+                D, I = session_index.search(q_emb, k)
+                session_chunks = []
+                for idx in I[0]:
+                    if idx < len(session_metadata):
+                        session_chunks.append(session_metadata[idx]["text"])
+                results["doc_data"] = "\n".join(session_chunks)
+            else:
+                rag_data = handle_rag_query(plan["query"])
+                results["doc_data"] = rag_data["context"]
 
         elif source == "hybrid":
             from services.sql_service import validate_sql
