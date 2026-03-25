@@ -12,6 +12,8 @@ def validate_sql(sql):
             raise Exception("Unsafe SQL detected")
     if "select" not in lowered:
         raise Exception("Only SELECT queries allowed")
+    if "limit" not in lowered:
+        sql = sql.rstrip(";") + " LIMIT 50"
     return sql
 
 def _coerce_types(df):

@@ -128,6 +128,33 @@ def search_transcripts(keyword, limit=20):
         columns = list(result.keys())
     df = pd.DataFrame(rows, columns=columns)
     return _serialize_df(df)
+def get_customers_by_interaction_count(sentiment, min_count=5, limit=20):
+    sql = """
+    SELECT
+        c.first_name,
+        c.last_name,
+        c.email,
+        t.sentiment,
+        COUNT(t.id) as interactions
+    FROM transcripts t
+    LEFT JOIN contact c ON t.customer_id = c.id
+    WHERE UPPER(t.sentiment) = UPPER(:sentiment)
+    AND t.customer_id IS NOT NULL
+    GROUP BY c.first_name, c.last_name, c.email, t.sentiment
+    HAVING COUNT(t.id) > :min_count
+    ORDER BY interactions DESC
+    LIMIT :limit
+    """
+    with engine.connect() as conn:
+        result = conn.execute(text(sql), {
+            "sentiment": sentiment,
+            "min_count": min_count,
+            "limit": limit
+        })
+        rows = result.fetchall()
+        columns = list(result.keys())
+    df = pd.DataFrame(rows, columns=columns)
+    return _serialize_df(df)
 
 def handle_transcript_query(question):
     q = question.lower()
@@ -137,6 +164,12 @@ def handle_transcript_query(question):
 
     if "positive" in q and ("revenue" in q or "high value" in q or "opportunity" in q):
         return get_customers_with_sentiment_and_revenue("POSITIVE")
+
+    if ("more than" in q or "greater than" in q or "over" in q) and "negative" in q:
+        return get_customers_by_interaction_count("NEGATIVE")
+
+    if ("more than" in q or "greater than" in q or "over" in q) and "positive" in q:
+        return get_customers_by_interaction_count("POSITIVE")
 
     if "negative" in q:
         return get_transcripts_by_sentiment("NEGATIVE")

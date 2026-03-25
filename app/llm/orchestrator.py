@@ -10,9 +10,6 @@ def extract_customer_name(query):
     q = query.lower()
     triggers = [
         "tell me about",
-        "show me",
-        "who is",
-        "customer",
         "history for",
         "profile of",
         "details for",
@@ -41,8 +38,7 @@ def is_customer_360_query(query):
         return False
     multi_source_hints = [
         "history", "profile", "tell me about", "everything about",
-        "purchases", "calls",
-        "complaining", "issue", "concern", "help", "support"
+        "purchases", "calls", "complaining", "issue", "concern", "help", "support"
     ]
     for hint in multi_source_hints:
         if hint in q:
@@ -112,12 +108,21 @@ Vector search over uploaded Salesforce documents and attachments.
 
 4. HYBRID
 Use when the question requires joining CRM tables WITH transcripts.
+Examples: customers with negative sentiment and high revenue, industries with most negative sentiment.
+
+5. GENERAL
+Use for:
+- General knowledge questions (weather, news, definitions)
+- Business strategy suggestions based on CRM context
+- Advice or recommendations not requiring data lookup
+- Conversational questions
+- Anything not related to querying the database
 
 Return ONLY valid JSON:
 
 {{
-  "source": "crm" | "transcripts" | "documents" | "hybrid",
-  "query": "rewritten query",
+  "source": "crm" | "transcripts" | "documents" | "hybrid" | "general",
+  "query": "rewritten query if needed, else original",
   "visualize": true | false
 }}
 
@@ -199,10 +204,29 @@ User question:
             results["hybrid_data"] = hybrid_result
             visual_data = hybrid_result
 
+        elif source == "general":
+            results["general"] = True
+
     except Exception as e:
         results["error"] = str(e)
 
-    final_prompt = f"""
+    results_str = json.dumps(results)
+    if len(results_str) > 30000:
+        results_str = results_str[:30000] + "... [truncated]"
+
+    if source == "general":
+        final_prompt = f"""
+You are a helpful AI assistant with knowledge of Salesforce CRM, business strategy, sales, and general topics.
+
+Answer the following question clearly and helpfully.
+If it is a business strategy question, provide actionable insights.
+If it is a general knowledge question, answer directly.
+
+Question:
+{user_query}
+"""
+    else:
+        final_prompt = f"""
 You are a Salesforce CRM assistant.
 
 Answer the question using the data below.
@@ -216,7 +240,7 @@ Question:
 {user_query}
 
 Data:
-{json.dumps(results)}
+{results_str}
 """
 
     response_text = generate_response(final_prompt)

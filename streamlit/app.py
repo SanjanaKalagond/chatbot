@@ -5,13 +5,13 @@ import pandas as pd
 API_URL = "http://localhost:8000"
 
 st.set_page_config(
-    page_title="SF Intelligence Hub",
+    page_title="SF Chatbot",
     page_icon="",
     layout="wide"
 )
 
 with st.sidebar:
-    st.title("SF Intelligence Hub")
+    st.title("SF Chatbot")
     st.markdown("---")
     st.markdown("**Data Sources**")
     st.success("CRM Database")
@@ -59,7 +59,7 @@ with st.sidebar:
         except Exception:
             st.error("Could not clear session documents.")
 
-st.title("Ask your CRM")
+st.title("Ask your queries")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -108,7 +108,7 @@ if prompt:
                     f"{API_URL}/chat",
                     json={
                         "question": prompt,
-                        "history": st.session_state.messages[:-1]
+                        "history": []
                     },
                     timeout=200
                 )

@@ -26,6 +26,10 @@ IMPORTANT RULES:
 - Always cast them using CAST(column AS NUMERIC) when sorting, comparing, or aggregating.
 - Always use NULLS LAST when ordering.
 - Never use SELECT * — always name the columns explicitly.
+- sentiment values are always uppercase: use 'NEGATIVE', 'POSITIVE', 'NEUTRAL' never 'Negative' or 'Positive'.
+- When filtering by amount or revenue, do not hardcode thresholds. Use ORDER BY and LIMIT instead to find top results.
+- case_table.status values are: 'Open', 'Closed', 'New', 'Solved', 'Pending Hold'.
+- When asked for open cases use: status = 'Open'.
 """
 
 def generate_sql(question):
