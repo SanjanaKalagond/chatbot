@@ -1,6 +1,74 @@
-from sqlalchemy import MetaData, Table, Column, String, JSON, DateTime, Integer, Text
+from sqlalchemy import MetaData, Table, Column, String, JSON, DateTime, Integer, Text, TIMESTAMP
 
 metadata = MetaData()
+
+account = Table(
+    "account",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("name", Text),
+    Column("industry", Text),
+    Column("phone", Text),
+    Column("billing_city", Text),
+    Column("billing_country", Text),
+    Column("last_modified", TIMESTAMP)
+)
+
+contact = Table(
+    "contact",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("first_name", Text),
+    Column("last_name", Text),
+    Column("email", Text),
+    Column("phone", Text),
+    Column("account_id", Text),
+    Column("last_modified", TIMESTAMP)
+)
+
+opportunity = Table(
+    "opportunity",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("name", Text),
+    Column("stage", Text),
+    Column("amount", Text),
+    Column("close_date", Text),
+    Column("account_id", Text),
+    Column("last_modified", TIMESTAMP)
+)
+
+orders = Table(
+    "orders",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("account_id", Text),
+    Column("status", Text),
+    Column("effective_date", Text),
+    Column("last_modified", TIMESTAMP)
+)
+
+order_item = Table(
+    "order_item",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("order_id", Text),
+    Column("quantity", Text),
+    Column("unit_price", Text),
+    Column("total_price", Text),
+    Column("last_modified", TIMESTAMP)
+)
+
+case_table = Table(
+    "case_table",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("subject", Text),
+    Column("status", Text),
+    Column("priority", Text),
+    Column("account_id", Text),
+    Column("last_modified", TIMESTAMP)
+)
 
 salesforce_objects = Table(
     "salesforce_objects",

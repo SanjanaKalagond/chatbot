@@ -85,6 +85,51 @@ Include sentiment trend, recent interactions, purchase history and any open case
             }
         }
 
+    q_lower = (user_query or "").lower()
+    if "sentiment" in q_lower:
+        if "month" in q_lower or "by month" in q_lower:
+            transcript_data = handle_transcript_query(user_query)
+            results = {"transcript_data": transcript_data}
+            results_str = json.dumps(results)
+            final_prompt = f"""
+You are a Salesforce CRM assistant.
+
+Answer the question using the data below.
+If transcript data is provided, produce a clear breakdown and call out month-by-month comparisons when present.
+
+Question:
+{user_query}
+
+Data:
+{results_str}
+"""
+            response_text = generate_response(final_prompt)
+            return {
+                "answer": response_text,
+                "visual_data": {"sql": "transcripts_sentiment_by_month", "rows": transcript_data, "source": "transcripts"}
+            }
+        if "breakdown" in q_lower or "overview" in q_lower or "summary" in q_lower or "all interactions" in q_lower or "all customer interactions" in q_lower:
+            transcript_data = handle_transcript_query(user_query)
+            results = {"transcript_data": transcript_data}
+            results_str = json.dumps(results)
+            final_prompt = f"""
+You are a Salesforce CRM assistant.
+
+Answer the question using the data below.
+If transcript data is provided, provide a sentiment breakdown with totals and percentages.
+
+Question:
+{user_query}
+
+Data:
+{results_str}
+"""
+            response_text = generate_response(final_prompt)
+            return {
+                "answer": response_text,
+                "visual_data": {"sql": "transcripts_sentiment_breakdown", "rows": transcript_data, "source": "transcripts"}
+            }
+
     planner_prompt = f"""
 You are a planner for a Salesforce CRM AI assistant.
 
@@ -194,7 +239,7 @@ User question:
                             df[col] = converted
                     except Exception:
                         pass
-
+            df = df.where(pd.notnull(df), None)
             hybrid_result = {
                 "sql": hybrid_sql,
                 "rows": df.to_dict(orient="records"),

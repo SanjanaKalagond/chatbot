@@ -17,6 +17,7 @@ def validate_sql(sql):
     return sql
 
 def _coerce_types(df):
+    import math
     for col in df.columns:
         if pd.api.types.is_datetime64_any_dtype(df[col]):
             df[col] = df[col].astype(str)
@@ -27,6 +28,7 @@ def _coerce_types(df):
                     df[col] = converted
             except Exception:
                 pass
+    df = df.where(pd.notnull(df), None)
     return df
 
 def _trigger_background_sync():

@@ -3,7 +3,6 @@ import time
 from app.ingestion.transcript_pipeline import ingest_transcripts
 
 def run_transcript_phase():
-    # Only Task and Event for this run
     transcript_objects = ["Task", "Event"]
     
     print("STARTING TRANSCRIPT INGESTION PHASE")

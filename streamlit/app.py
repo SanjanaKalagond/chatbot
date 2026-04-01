@@ -1,8 +1,8 @@
 import streamlit as st
 import requests
 import pandas as pd
-
-API_URL = "http://localhost:8000"
+import os
+API_URL = os.getenv("API_URL","http://localhost:8000")
 
 st.set_page_config(
     page_title="SF Chatbot",
@@ -14,15 +14,18 @@ with st.sidebar:
     st.title("SF Chatbot")
     st.markdown("---")
     st.markdown("**Data Sources**")
-    st.success("CRM Database")
+    st.success("Database")
     st.success("Transcripts")
     st.success("Documents")
     st.markdown("---")
     st.markdown("**Upload a Document**")
+    if "uploader_key" not in st.session_state:
+        st.session_state.uploader_key = 0
     uploaded_file = st.file_uploader(
         "Upload PDF or Word doc",
         type=["pdf", "docx", "txt"],
-        help="Upload a document to query against"
+        help="Upload a document to query against",
+        key=f"doc_uploader_{st.session_state.uploader_key}",
     )
     if uploaded_file:
         with st.spinner("Uploading..."):
@@ -42,10 +45,8 @@ with st.sidebar:
     st.markdown("**Example Questions**")
     st.caption("show me accounts by industry")
     st.caption("top 10 opportunities by amount")
-    st.caption("customers with negative sentiment")
-    st.caption("what documents do we have")
+    st.caption("List customers with negative sentiment")
     st.caption("tell me about Larry Fox")
-    st.caption("customer Smita Sangani is complaining about delivery")
     st.markdown("---")
     if st.button("Clear Chat"):
         st.session_state.messages = []
@@ -55,7 +56,9 @@ with st.sidebar:
         try:
             requests.post(f"{API_URL}/clear_session_docs", timeout=10)
             st.session_state.doc_uploaded = False
-            st.success("Session documents cleared.")
+            st.session_state.uploader_key += 1  
+            st.success("Session document cleared. New answers will not use the uploaded file.")
+            st.rerun()
         except Exception:
             st.error("Could not clear session documents.")
 
@@ -80,7 +83,14 @@ def render_chart(rows):
         text_cols = df.select_dtypes(exclude="number").columns.tolist()
         if numeric_cols and len(df) > 1:
             index_col = text_cols[0] if text_cols else df.columns[0]
-            st.bar_chart(df.set_index(index_col)[numeric_cols])
+            is_time_series = any(
+                keyword in str(index_col).lower()
+                for keyword in ["month", "date", "week", "year", "time"]
+            )
+            if is_time_series:
+                st.line_chart(df.set_index(index_col)[numeric_cols])
+            else:
+                st.bar_chart(df.set_index(index_col)[numeric_cols])
         with st.expander("View Table"):
             st.dataframe(df, use_container_width=True)
     except Exception:
@@ -125,11 +135,11 @@ if prompt:
                     if source == "customer_360":
                         st.caption("Customer View")
                     elif source == "salesforce_live":
-                        st.caption("Data fetched live from Salesforce — syncing to database in background")
+                        st.caption("Data fetched live from Salesforce: syncing to database in background")
                     elif source == "not_found":
                         st.caption("No data found in database or Salesforce")
                     elif source == "hybrid":
-                        st.caption("Hybrid query — CRM + Transcripts")
+                        st.caption("Hybrid query= CRM + Transcripts")
 
                     if "rows" in visual_data and visual_data["rows"]:
                         render_chart(visual_data["rows"])

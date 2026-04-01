@@ -26,10 +26,17 @@ IMPORTANT RULES:
 - Always cast them using CAST(column AS NUMERIC) when sorting, comparing, or aggregating.
 - Always use NULLS LAST when ordering.
 - Never use SELECT * — always name the columns explicitly.
-- sentiment values are always uppercase: use 'NEGATIVE', 'POSITIVE', 'NEUTRAL' never 'Negative' or 'Positive'.
-- When filtering by amount or revenue, do not hardcode thresholds. Use ORDER BY and LIMIT instead to find top results.
+- sentiment values are always uppercase: use 'NEGATIVE', 'POSITIVE', 'NEUTRAL'.
+- When filtering by amount or revenue, do not hardcode thresholds. Use ORDER BY and LIMIT instead.
 - case_table.status values are: 'Open', 'Closed', 'New', 'Solved', 'Pending Hold'.
-- When asked for open cases use: status = 'Open'.
+- orders.status values are: 'Completed', 'Cancelled', 'Refunded', 'Processing', 'Shipped', 'Preview', 'Pending'. Always use exact case.
+- effective_date is stored as TEXT in format 'YYYY-MM-DD'. To filter by date use: CAST(effective_date AS DATE) >= CURRENT_DATE - INTERVAL '2 months'.
+- When filtering dates on TEXT columns always cast first: CAST(column AS DATE).
+- Never use date() function. Always use CAST(column AS DATE) or CAST(column AS TIMESTAMP).
+- When asked about "last N months" use: CAST(effective_date AS DATE) >= CURRENT_DATE - INTERVAL 'N months'.
+- When asked about "till today" or "total" do not add any date filter.
+- When asked for orders or trends over a time period, always GROUP BY month and COUNT(*), do not return individual rows.
+- For time-series queries use: DATE_TRUNC('month', CAST(effective_date AS DATE)) AS month, COUNT(*) as count
 """
 
 def generate_sql(question):
