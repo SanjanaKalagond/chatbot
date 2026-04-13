@@ -4,7 +4,8 @@ from google import genai
 
 load_dotenv()
 
-api_key = os.getenv("TEST_KEY2")
+api_key = os.getenv("TEST_KEY3")
+# TEST_KEY1
 if not api_key:
     raise ValueError("GEMINI_API_KEY not found")
 

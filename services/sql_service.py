@@ -3,6 +3,7 @@ import pandas as pd
 from sqlalchemy import text
 from app.database.postgres import engine
 from app.llm.sql_generator import generate_sql
+from app.llm.sql_generator_b2b import generate_b2b_sql
 
 def validate_sql(sql):
     forbidden = ["delete", "update", "drop", "truncate", "alter"]
@@ -107,4 +108,24 @@ def handle_sql_query(question):
         "sql": sql,
         "rows": df.to_dict(orient="records"),
         "source": "postgres"
+    }
+
+
+def handle_b2b_accounts_query(question):
+    """NL → SQL against b2b_accounts only; visual_data source 'b2b_accounts'."""
+    sql = generate_b2b_sql(question)
+    sql = validate_sql(sql)
+
+    with engine.connect() as conn:
+        result = conn.execute(text(sql))
+        rows = result.fetchall()
+        columns = list(result.keys())
+
+    df = pd.DataFrame(rows, columns=columns)
+    df = _coerce_types(df)
+
+    return {
+        "sql": sql,
+        "rows": df.to_dict(orient="records"),
+        "source": "b2b_accounts",
     }

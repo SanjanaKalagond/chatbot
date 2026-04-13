@@ -79,6 +79,40 @@ salesforce_objects = Table(
     Column("last_modified", DateTime, index=True)
 )
 
+# B2B Account rows only (Salesforce RecordType.DeveloperName = 'Business_Account').
+b2b_accounts = Table(
+    "b2b_accounts",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("name", Text),
+    Column("account_type", Text),
+    Column("industry", Text),
+    Column("annual_revenue", Text),
+    Column("phone", Text),
+    Column("fax", Text),
+    Column("website", Text),
+    Column("account_source", Text),
+    Column("description", Text),
+    Column("number_of_employees", Text),
+    Column("owner_id", String, index=True),
+    Column("parent_id", String, index=True),
+    Column("billing_street", Text),
+    Column("billing_city", Text),
+    Column("billing_state", Text),
+    Column("billing_postal_code", Text),
+    Column("billing_country", Text),
+    Column("shipping_street", Text),
+    Column("shipping_city", Text),
+    Column("shipping_state", Text),
+    Column("shipping_postal_code", Text),
+    Column("shipping_country", Text),
+    Column("record_type_id", String, index=True),
+    Column("record_type_developer_name", String, index=True),
+    Column("raw", JSON),
+    Column("created_date", TIMESTAMP),
+    Column("last_modified", TIMESTAMP, index=True),
+)
+
 transcripts = Table(
     "transcripts",
     metadata,

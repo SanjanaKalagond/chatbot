@@ -1,6 +1,6 @@
 import json
 from app.llm.gemini_client import generate_response
-from services.sql_service import handle_sql_query
+from services.sql_service import handle_sql_query, handle_b2b_accounts_query
 from app.llm.sql_generator import generate_sql
 from services.transcript_service import handle_transcript_query
 from services.rag_service import handle_rag_query
@@ -144,18 +144,24 @@ orders(id, account_id, status, effective_date)
 order_item(id, order_id, quantity, unit_price, total_price)
 case_table(id, subject, status, priority, account_id)
 
-2. TRANSCRIPTS
+2. B2B ACCOUNTS
+Table b2b_accounts ONLY: Salesforce Accounts with RecordType DeveloperName Business_Account (ingested subset).
+Columns include: id, name, industry, annual_revenue, billing_*, shipping_*, owner_id, parent_id, record_type_developer_name, last_modified, created_date, etc.
+Use when the user asks about B2B accounts, business accounts, Business_Account record type, or account data that should be restricted to this B2B subset (not the generic account table).
+Examples: count B2B accounts by country, list B2B accounts in an industry, top B2B accounts by revenue, parent-child B2B hierarchy, B2B accounts owned by a user, recently modified B2B accounts.
+
+3. TRANSCRIPTS
 transcripts(id, object_type, subject, description, who_id, what_id, customer_id, sentiment, last_modified)
 Joined with contact(id, first_name, last_name) on transcripts.customer_id = contact.id
 
-3. DOCUMENTS
+4. DOCUMENTS
 Vector search over uploaded Salesforce documents and attachments.
 
-4. HYBRID
-Use when the question requires joining CRM tables WITH transcripts.
-Examples: customers with negative sentiment and high revenue, industries with most negative sentiment.
+5. HYBRID
+Use when the question requires joining CRM tables WITH transcripts, OR joining b2b_accounts with contact/opportunity/case/transcripts.
+Examples: B2B accounts with negative sentiment, industries with most negative sentiment, customers with high revenue and open cases.
 
-5. GENERAL
+6. GENERAL
 Use for:
 - General knowledge questions (weather, news, definitions)
 - Business strategy suggestions based on CRM context
@@ -166,7 +172,7 @@ Use for:
 Return ONLY valid JSON:
 
 {{
-  "source": "crm" | "transcripts" | "documents" | "hybrid" | "general",
+  "source": "crm" | "b2b_accounts" | "transcripts" | "documents" | "hybrid" | "general",
   "query": "rewritten query if needed, else original",
   "visualize": true | false
 }}
@@ -182,6 +188,9 @@ User question:
     except Exception:
         plan = {"source": "crm", "query": user_query, "visualize": False}
 
+    if plan.get("source") == "b2b":
+        plan["source"] = "b2b_accounts"
+
     results = {}
     visual_data = None
     source = plan.get("source", "crm")
@@ -191,6 +200,11 @@ User question:
             crm_result = handle_sql_query(plan["query"])
             results["crm_data"] = crm_result
             visual_data = crm_result
+
+        elif source == "b2b_accounts":
+            b2b_result = handle_b2b_accounts_query(plan["query"])
+            results["b2b_accounts_data"] = b2b_result
+            visual_data = b2b_result
 
         elif source == "transcripts":
             transcript_data = handle_transcript_query(plan["query"])
@@ -276,6 +290,7 @@ You are a Salesforce CRM assistant.
 
 Answer the question using the data below.
 If CRM data is provided, summarize it clearly.
+If B2B accounts data is provided, summarize using only b2b_accounts results (Business_Account subset).
 If transcript data is provided, explain customer sentiment.
 If hybrid data is provided, combine CRM and transcript insights.
 If document context is provided, answer using that information.

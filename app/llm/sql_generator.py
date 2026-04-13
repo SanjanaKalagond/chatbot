@@ -3,6 +3,9 @@ from app.llm.gemini_client import generate_response
 SCHEMA = """
 PostgreSQL tables:
 
+b2b_accounts(id TEXT, name TEXT, account_type TEXT, industry TEXT, annual_revenue TEXT, phone TEXT, fax TEXT, website TEXT, account_source TEXT, description TEXT, number_of_employees TEXT, owner_id TEXT, parent_id TEXT, billing_street TEXT, billing_city TEXT, billing_state TEXT, billing_postal_code TEXT, billing_country TEXT, shipping_street TEXT, shipping_city TEXT, shipping_state TEXT, shipping_postal_code TEXT, shipping_country TEXT, record_type_id TEXT, record_type_developer_name TEXT, last_modified TIMESTAMP, created_date TIMESTAMP)
+-- b2b_accounts = Salesforce Accounts with Business_Account record type only. Join: contact.account_id = b2b_accounts.id, opportunity.account_id = b2b_accounts.id, case_table.account_id = b2b_accounts.id. Self-join parent: child.parent_id = parent.id
+
 account(id TEXT, name TEXT, industry TEXT, phone TEXT, billing_city TEXT, billing_country TEXT, last_modified TIMESTAMP)
 contact(id TEXT, first_name TEXT, last_name TEXT, email TEXT, phone TEXT, account_id TEXT, last_modified TIMESTAMP)
 opportunity(id TEXT, name TEXT, stage TEXT, amount TEXT, close_date TEXT, account_id TEXT, last_modified TIMESTAMP)
@@ -13,10 +16,11 @@ transcripts(id TEXT, object_type TEXT, subject TEXT, description TEXT, who_id TE
 documents(id TEXT, title TEXT, file_extension TEXT, linked_entity_id TEXT, s3_path TEXT, last_modified TIMESTAMP)
 
 Foreign keys:
-contact.account_id -> account.id
-opportunity.account_id -> account.id
-orders.account_id -> account.id
-case_table.account_id -> account.id
+contact.account_id -> account.id OR b2b_accounts.id (same Salesforce Id type)
+opportunity.account_id -> account.id OR b2b_accounts.id
+orders.account_id -> account.id OR b2b_accounts.id
+case_table.account_id -> account.id OR b2b_accounts.id
+b2b_accounts.parent_id -> b2b_accounts.id
 order_item.order_id -> orders.id
 transcripts.customer_id -> contact.id
 documents.linked_entity_id -> account.id

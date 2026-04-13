@@ -13,10 +13,32 @@ st.set_page_config(
 with st.sidebar:
     st.title("SF Chatbot")
     st.markdown("---")
-    st.markdown("**Data Sources**")
-    st.success("Database")
-    st.success("Transcripts")
-    st.success("Documents")
+    st.markdown("**Query genres**")
+    st.caption("The planner routes your question to one of these.")
+    with st.expander("CRM Database", expanded=False):
+        st.markdown(
+            "CRM tables: `account`, `contact`, `opportunity`, `orders`, `order_item`, `case_table`."
+        )
+        st.caption("Show me accounts by industry")
+        st.caption("Top 10 opportunities by amount")
+        st.caption("Open cases by priority")
+    with st.expander("B2B Accounts", expanded=False):
+        st.caption("How many B2B accounts per billing country?")
+        st.caption("List B2B accounts in the Technology industry")
+        st.caption("Top 15 B2B accounts by annual revenue")
+        st.caption("B2B accounts modified in the last 90 days")
+        st.caption("B2B accounts with a parent account (hierarchy)")
+    with st.expander("Transcripts", expanded=False):
+        st.caption("List customers with negative sentiment")
+        st.caption("Sentiment breakdown by month")
+    with st.expander("Documents", expanded=False):
+        st.markdown("RAG over ingested Salesforce documents + session uploads.")
+    with st.expander("Hybrid", expanded=False):
+        st.markdown("Joins **CRM and/or b2b_accounts** with **transcripts** (e.g. sentiment + revenue).")
+        st.caption("Industries with the most negative sentiment")
+    with st.expander("General", expanded=False):
+        st.markdown("Definitions, strategy, Customer Information.")
+        st.caption("Tell me about Larry Fox")
     st.markdown("---")
     st.markdown("**Upload a Document**")
     if "uploader_key" not in st.session_state:
@@ -41,13 +63,6 @@ with st.sidebar:
                 st.error("Cannot connect to backend.")
             except Exception as e:
                 st.error(f"Error: {str(e)}")
-    st.markdown("---")
-    st.markdown("**Example Questions**")
-    st.caption("show me accounts by industry")
-    st.caption("top 10 opportunities by amount")
-    st.caption("List customers with negative sentiment")
-    st.caption("tell me about Larry Fox")
-    st.markdown("---")
     if st.button("Clear Chat"):
         st.session_state.messages = []
         st.session_state.doc_uploaded = False
@@ -139,7 +154,9 @@ if prompt:
                     elif source == "not_found":
                         st.caption("No data found in database or Salesforce")
                     elif source == "hybrid":
-                        st.caption("Hybrid query= CRM + Transcripts")
+                        st.caption("Hybrid query: CRM / B2B + Transcripts")
+                    elif source == "b2b_accounts":
+                        st.caption("B2B Accounts (Business_Account data in b2b_accounts)")
 
                     if "rows" in visual_data and visual_data["rows"]:
                         render_chart(visual_data["rows"])
