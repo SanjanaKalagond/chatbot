@@ -42,6 +42,7 @@ orders = Table(
     "orders",
     metadata,
     Column("id", Text, primary_key=True),
+    Column("wc_order_id_c", Text),
     Column("account_id", Text),
     Column("status", Text),
     Column("effective_date", Text),

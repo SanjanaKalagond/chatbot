@@ -1,5 +1,3 @@
-#incremental_sync.py
-
 import sys
 import time
 from datetime import datetime
@@ -22,8 +20,13 @@ from app.database.schema import (
 from app.database.sync_metadata import get_last_sync, set_last_sync
 from app.sentiment.sentiment_model import analyze_sentiment
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import text
 
 SYNC_INTERVAL_SECONDS = 1200
+
+def _ensure_orders_wc_order_id_column():
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS wc_order_id_c TEXT"))
 
 def parse_sf_datetime(dt):
     if not dt:
@@ -37,11 +40,11 @@ def sync_crm_object(object_name, access_token, instance_url):
     last_sync = get_last_sync(object_name)
 
     field_map = {
-        "Account": "Id, Name, Type, Industry, AnnualRevenue, Phone, Website, BillingCity, LastModifiedDate",
+        "Account": "Id, Name, Type, Industry, AnnualRevenue, Phone, Website, BillingCity, BillingCountry, LastModifiedDate",
         "Contact": "Id, FirstName, LastName, Email, Phone, AccountId, LastModifiedDate",
         "Opportunity": "Id, Name, Amount, StageName, CloseDate, AccountId, LastModifiedDate",
         "Case": "Id, Subject, Status, Priority, Description, AccountId, LastModifiedDate",
-        "Order": "Id, AccountId, EffectiveDate, Status, TotalAmount, LastModifiedDate",
+        "Order": "Id, WC_Order_ID__c, AccountId, EffectiveDate, Status, TotalAmount, LastModifiedDate",
         "OrderItem": "Id, OrderId, Quantity, UnitPrice, TotalPrice, LastModifiedDate",
     }
 
@@ -87,10 +90,6 @@ def sync_crm_object(object_name, access_token, instance_url):
     print(f"Finished {object_name}: {total} new/updated records")
 
 def _upsert_typed_rows(object_name, rows):
-    """
-    Keep the typed tables updated too (account/contact/opportunity/orders/order_item/case_table).
-    Uses Salesforce Id as PK to prevent duplicates.
-    """
     if not rows:
         return
 
@@ -169,9 +168,11 @@ def _upsert_typed_rows(object_name, rows):
     elif object_name == "Order":
         out = []
         for r in rows:
+            wc_order_id = r.get("WC_Order_ID__c") or r.get("WC_Order_ID_c")
             out.append(
                 {
                     "id": r.get("Id"),
+                    "wc_order_id_c": wc_order_id,
                     "account_id": r.get("AccountId"),
                     "status": r.get("Status"),
                     "effective_date": r.get("EffectiveDate"),
@@ -180,6 +181,7 @@ def _upsert_typed_rows(object_name, rows):
             )
         tbl = orders
         set_cols = {
+            "wc_order_id_c": "wc_order_id_c",
             "account_id": "account_id",
             "status": "status",
             "effective_date": "effective_date",
@@ -262,15 +264,17 @@ def sync_transcript_object(object_name, access_token, instance_url):
     for batch in run_query_stream(instance_url, access_token, soql):
         rows = []
         for r in batch:
-            subject = r.get("Subject")
-            description = r.get("Description")
-            text_for_sentiment = description or subject or ""
+            subject = r.get("Subject") or ""
+            description = r.get("Description") or ""
+            
+            text_for_sentiment = description if description else subject
             sentiment = analyze_sentiment(text_for_sentiment) if text_for_sentiment.strip() else "NEUTRAL"
+            
             rows.append({
                 "id": r.get("Id"),
                 "object_type": object_name,
-                "subject": subject,
-                "description": description,
+                "subject": subject if subject else None,
+                "description": description if description else None,
                 "who_id": r.get("WhoId"),
                 "what_id": r.get("WhatId"),
                 "customer_id": r.get("WhoId") or r.get("WhatId"),
@@ -298,10 +302,6 @@ def sync_transcript_object(object_name, access_token, instance_url):
     print(f"Finished {object_name} transcripts: {total} new/updated records")
 
 def sync_documents(access_token, instance_url):
-    """
-    Incremental sync for documents table from ContentVersion.
-    Cursor key: documents_ContentVersion
-    """
     key = "documents_ContentVersion"
     last_sync = get_last_sync(key)
 
@@ -355,10 +355,6 @@ def sync_documents(access_token, instance_url):
     print(f"Finished documents: {total} new/updated records")
 
 def sync_b2b_accounts(access_token, instance_url):
-    """
-    Incremental sync for b2b_accounts from Account filtered by Business_Account record type.
-    Cursor key: Account_B2B
-    """
     key = "Account_B2B"
     last_sync = get_last_sync(key)
 
@@ -439,6 +435,7 @@ def sync_b2b_accounts(access_token, instance_url):
 def run_incremental_sync():
     print(f"Starting incremental sync at {datetime.utcnow()}")
     sys.stdout.flush()
+    _ensure_orders_wc_order_id_column()
 
     try:
         access_token, instance_url = get_salesforce_token()
@@ -448,19 +445,15 @@ def run_incremental_sync():
 
     for obj in CRM_OBJECTS:
         try:
-            # 1) keep the generic JSON mirror up-to-date
             sync_crm_object(obj, access_token, instance_url)
 
-            # 2) also keep typed tables up-to-date (same SOQL batch data is inside salesforce_objects.data)
-            #    To avoid a second Salesforce call, we re-query just the changed rows for typed tables.
-            #    (Still incremental; uses the same cursor key as sync_crm_object.)
             last_sync = get_last_sync(obj)
             field_map = {
                 "Account": "Id, Name, Industry, Phone, BillingCity, BillingCountry, LastModifiedDate",
                 "Contact": "Id, FirstName, LastName, Email, Phone, AccountId, LastModifiedDate",
                 "Opportunity": "Id, Name, Amount, StageName, CloseDate, AccountId, LastModifiedDate",
                 "Case": "Id, Subject, Status, Priority, AccountId, LastModifiedDate",
-                "Order": "Id, AccountId, EffectiveDate, Status, LastModifiedDate",
+                "Order": "Id, WC_Order_ID__c, AccountId, EffectiveDate, Status, LastModifiedDate",
                 "OrderItem": "Id, OrderId, Quantity, UnitPrice, TotalPrice, LastModifiedDate",
             }
             fields = field_map.get(obj, "Id, LastModifiedDate")
@@ -476,7 +469,6 @@ def run_incremental_sync():
             print(f"Error syncing {obj}: {str(e)}")
         sys.stdout.flush()
 
-    # B2B subset table
     try:
         sync_b2b_accounts(access_token, instance_url)
     except Exception as e:
@@ -490,7 +482,6 @@ def run_incremental_sync():
             print(f"Error syncing transcripts {obj}: {str(e)}")
         sys.stdout.flush()
 
-    # Documents metadata table
     try:
         sync_documents(access_token, instance_url)
     except Exception as e:

@@ -23,15 +23,17 @@ def ingest_transcripts(object_name):
     for batch in run_query_stream(instance_url, access_token, soql):
         rows = []
         for r in batch:
-            subject = r.get("Subject")
-            description = r.get("Description")
-            text_for_sentiment = description or subject or ""
+            subject = r.get("Subject") or ""
+            description = r.get("Description") or ""
+            
+            text_for_sentiment = description if description else subject
             sentiment_label = analyze_sentiment(text_for_sentiment) if text_for_sentiment.strip() else "NEUTRAL"
+            
             rows.append({
                 "id": r.get("Id"),
                 "object_type": object_name,
-                "subject": subject,
-                "description": description,
+                "subject": subject if subject else None,
+                "description": description if description else None,
                 "who_id": r.get("WhoId"),
                 "what_id": r.get("WhatId"),
                 "customer_id": r.get("WhoId") or r.get("WhatId"),

@@ -1,4 +1,3 @@
-#customer_service.py
 import pandas as pd
 from sqlalchemy import text
 from app.database.postgres import engine
@@ -70,20 +69,40 @@ def get_crm_profile(contact_id, account_id):
         row = result.fetchone()
         if row:
             return dict(row._mapping)
+    
+    sql_b2b = """
+    SELECT
+        c.first_name,
+        c.last_name,
+        c.email,
+        c.phone,
+        b.name as account_name,
+        b.industry,
+        b.billing_city,
+        b.billing_country
+    FROM contact c
+    LEFT JOIN b2b_accounts b ON c.account_id = b.id
+    WHERE c.id = :cid
+    """
+    with engine.connect() as conn:
+        result = conn.execute(text(sql_b2b), {"cid": contact_id})
+        row = result.fetchone()
+        if row:
+            return dict(row._mapping)
+    
     return {}
 
 def get_purchase_history(account_id):
     sql = """
     SELECT
-        o.id as order_id,
+        COALESCE(o.wc_order_id_c, o.id) as order_id,
         o.status,
         o.effective_date,
-        oi.quantity,
-        oi.unit_price,
-        oi.total_price
+        COALESCE(SUM(CAST(oi.total_price AS NUMERIC)), 0) as total_price
     FROM orders o
     LEFT JOIN order_item oi ON oi.order_id = o.id
     WHERE o.account_id = :aid
+    GROUP BY o.id, o.wc_order_id_c, o.status, o.effective_date
     ORDER BY o.effective_date DESC NULLS LAST
     LIMIT 20
     """

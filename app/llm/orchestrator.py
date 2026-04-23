@@ -1,6 +1,7 @@
 import json
+from app.json_sanitize import sanitize_for_json
 from app.llm.gemini_client import generate_response
-from services.sql_service import handle_sql_query, handle_b2b_accounts_query
+from services.sql_service import handle_sql_query, handle_b2b_accounts_query, fetch_sample_rows_per_table
 from app.llm.sql_generator import generate_sql
 from services.transcript_service import handle_transcript_query
 from services.rag_service import handle_rag_query
@@ -45,6 +46,64 @@ def is_customer_360_query(query):
             return True
     return False
 
+def is_b2b_query(query):
+    q = query.lower()
+    
+    b2b_explicit_keywords = [
+        "b2b account",
+        "b2b_account",
+        "business account",
+        "business_account",
+        "recordtype",
+        "record type",
+        "developerName",
+        "business-to-business"
+    ]
+    
+    for keyword in b2b_explicit_keywords:
+        if keyword in q:
+            return True
+    
+    b2b_field_keywords = [
+        "annual revenue",
+        "annualrevenue",
+        "number of employees",
+        "numberofemployees",
+        "parent account",
+        "parent_id",
+        "owner_id",
+        "account owner",
+        "shipping address",
+        "shipping_",
+        "billing address",
+        "billing_"
+    ]
+    
+    has_b2b_field = any(keyword in q for keyword in b2b_field_keywords)
+    
+    has_account_context = any(word in q for word in ["account", "accounts", "company", "companies", "organization"])
+    
+    if has_b2b_field and has_account_context:
+        return True
+    
+    generic_crm_keywords = [
+        "contact",
+        "opportunity",
+        "case",
+        "order",
+        "order_item",
+        "transcript",
+        "sentiment",
+        "document"
+    ]
+    
+    has_other_object = any(keyword in q for keyword in generic_crm_keywords)
+    
+    if has_other_object and not any(keyword in q for keyword in b2b_explicit_keywords):
+        return False
+    
+    return False
+
 def process_complex_query(user_query, history=[], temp_pdf_context=None, session_index=None, session_metadata=None):
 
     if is_customer_360_query(user_query):
@@ -64,13 +123,13 @@ The agent asked: {user_query}
 
 Here is everything we know about this customer:
 
-Profile: {json.dumps(data.get('profile', {}))}
-Sentiment Summary: {json.dumps(data.get('sentiment_summary', []))}
-Recent Transcripts: {json.dumps(data.get('transcripts', [])[:5])}
-Purchase History: {json.dumps(data.get('purchases', [])[:5])}
-Open Cases: {json.dumps(data.get('cases', [])[:5])}
-Opportunities: {json.dumps(data.get('opportunities', [])[:5])}
-Relevant Documents: {json.dumps(data.get('documents', []))}
+Profile: {json.dumps(sanitize_for_json(data.get('profile', {})))}
+Sentiment Summary: {json.dumps(sanitize_for_json(data.get('sentiment_summary', [])))}
+Recent Transcripts: {json.dumps(sanitize_for_json(data.get('transcripts', [])[:5]))}
+Purchase History: {json.dumps(sanitize_for_json(data.get('purchases', [])[:5]))}
+Open Cases: {json.dumps(sanitize_for_json(data.get('cases', [])[:5]))}
+Opportunities: {json.dumps(sanitize_for_json(data.get('opportunities', [])[:5]))}
+Relevant Documents: {json.dumps(sanitize_for_json(data.get('documents', [])))}
 
 Give a clear, concise summary that helps the support agent assist this customer right now.
 Include sentiment trend, recent interactions, purchase history and any open cases.
@@ -78,17 +137,50 @@ Include sentiment trend, recent interactions, purchase history and any open case
         answer = generate_response(summary_prompt)
         return {
             "answer": answer,
-            "visual_data": {
+            "visual_data": sanitize_for_json({
                 "sql": "customer_360",
                 "rows": data.get("purchases", []),
-                "source": "customer_360"
-            }
+                "source": "customer_360",
+            }),
         }
 
     q_lower = (user_query or "").lower()
+    if "for each table" in q_lower and any(token in q_lower for token in ["record", "row", "sample"]):
+        sample_result = fetch_sample_rows_per_table(limit=5)
+        table_summaries = [
+            f"{entry['table']}: {entry['count']} rows"
+            for entry in sample_result.get("rows", [])
+        ]
+        return {
+            "answer": "Here are sample rows per table (up to 5 each):\n" + "\n".join(table_summaries),
+            "visual_data": sanitize_for_json(sample_result),
+        }
+
+    metadata_object_tokens = [
+        "objects",
+        "tables",
+        "views",
+        "schema",
+        "database objects",
+        "db objects",
+        "relations",
+    ]
+    metadata_list_tokens = ["list", "show", "what are", "display"]
+    if any(token in q_lower for token in metadata_object_tokens) and (
+        any(token in q_lower for token in metadata_list_tokens)
+        or any(token in q_lower for token in ["crm", "database", "db", "postgres", "postgresql"])
+    ):
+        crm_result = handle_sql_query(user_query)
+        rows = sanitize_for_json(crm_result.get("rows", []))
+        answer = f"I found {len(rows)} CRM database objects."
+        return {
+            "answer": answer,
+            "visual_data": sanitize_for_json(crm_result),
+        }
+
     if "sentiment" in q_lower:
         if "month" in q_lower or "by month" in q_lower:
-            transcript_data = handle_transcript_query(user_query)
+            transcript_data = sanitize_for_json(handle_transcript_query(user_query))
             results = {"transcript_data": transcript_data}
             results_str = json.dumps(results)
             final_prompt = f"""
@@ -106,10 +198,10 @@ Data:
             response_text = generate_response(final_prompt)
             return {
                 "answer": response_text,
-                "visual_data": {"sql": "transcripts_sentiment_by_month", "rows": transcript_data, "source": "transcripts"}
+                "visual_data": {"sql": "transcripts_sentiment_by_month", "rows": transcript_data, "source": "transcripts"},
             }
         if "breakdown" in q_lower or "overview" in q_lower or "summary" in q_lower or "all interactions" in q_lower or "all customer interactions" in q_lower:
-            transcript_data = handle_transcript_query(user_query)
+            transcript_data = sanitize_for_json(handle_transcript_query(user_query))
             results = {"transcript_data": transcript_data}
             results_str = json.dumps(results)
             final_prompt = f"""
@@ -127,7 +219,7 @@ Data:
             response_text = generate_response(final_prompt)
             return {
                 "answer": response_text,
-                "visual_data": {"sql": "transcripts_sentiment_breakdown", "rows": transcript_data, "source": "transcripts"}
+                "visual_data": {"sql": "transcripts_sentiment_breakdown", "rows": transcript_data, "source": "transcripts"},
             }
 
     planner_prompt = f"""
@@ -140,15 +232,34 @@ Tables:
 account(id, name, industry, phone, billing_city, billing_country)
 contact(id, first_name, last_name, email, phone, account_id)
 opportunity(id, name, stage, amount, close_date, account_id)
-orders(id, account_id, status, effective_date)
+orders(id, wc_order_id_c, account_id, status, effective_date)
 order_item(id, order_id, quantity, unit_price, total_price)
 case_table(id, subject, status, priority, account_id)
 
+Use 'crm' when:
+- Query involves contacts, opportunities, cases, orders, order items
+- Generic account queries without specific B2B context
+- Multi-table joins not involving B2B-specific fields
+
 2. B2B ACCOUNTS
-Table b2b_accounts ONLY: Salesforce Accounts with RecordType DeveloperName Business_Account (ingested subset).
-Columns include: id, name, industry, annual_revenue, billing_*, shipping_*, owner_id, parent_id, record_type_developer_name, last_modified, created_date, etc.
-Use when the user asks about B2B accounts, business accounts, Business_Account record type, or account data that should be restricted to this B2B subset (not the generic account table).
-Examples: count B2B accounts by country, list B2B accounts in an industry, top B2B accounts by revenue, parent-child B2B hierarchy, B2B accounts owned by a user, recently modified B2B accounts.
+Table b2b_accounts ONLY: Salesforce Accounts with RecordType DeveloperName Business_Account.
+Columns include: id, name, industry, annual_revenue, billing_*, shipping_*, owner_id, parent_id, record_type_developer_name, number_of_employees, account_source, description, fax, website, last_modified, created_date.
+
+Use 'b2b_accounts' when the query explicitly mentions:
+- "B2B account", "business account", "Business_Account", "b2b_account"
+- Fields unique to b2b_accounts: annual_revenue, number_of_employees, parent_id, owner_id, account_source, fax, description
+- Queries about parent-child account hierarchies
+- Queries filtering by account owner
+- Queries involving shipping/billing addresses in detail
+- Revenue analysis at account level
+- Employee count analysis
+
+Examples of b2b_accounts queries:
+- "How many B2B accounts per billing country?"
+- "List business accounts in Technology industry"
+- "Top 10 accounts by annual revenue"
+- "Accounts with parent accounts"
+- "B2B accounts owned by user X"
 
 3. TRANSCRIPTS
 transcripts(id, object_type, subject, description, who_id, what_id, customer_id, sentiment, last_modified)
@@ -158,8 +269,11 @@ Joined with contact(id, first_name, last_name) on transcripts.customer_id = cont
 Vector search over uploaded Salesforce documents and attachments.
 
 5. HYBRID
-Use when the question requires joining CRM tables WITH transcripts, OR joining b2b_accounts with contact/opportunity/case/transcripts.
-Examples: B2B accounts with negative sentiment, industries with most negative sentiment, customers with high revenue and open cases.
+Use when the question requires:
+- Joining b2b_accounts with transcripts/sentiment
+- Joining CRM tables with transcripts
+- Cross-analysis involving sentiment and CRM/B2B data
+Examples: "B2B accounts with negative sentiment", "industries with most complaints", "high revenue customers with support issues"
 
 6. GENERAL
 Use for:
@@ -167,7 +281,13 @@ Use for:
 - Business strategy suggestions based on CRM context
 - Advice or recommendations not requiring data lookup
 - Conversational questions
-- Anything not related to querying the database
+
+CRITICAL ROUTING RULES:
+- If query mentions "B2B", "business account", "annual revenue", "number of employees", "parent account", "account owner", or "recordtype" → use 'b2b_accounts'
+- If query only mentions generic "account" without B2B context and involves other objects (contacts, cases, opportunities) → use 'crm'
+- If query needs sentiment + account data → use 'hybrid'
+- If query is about documents or uploaded files → use 'documents'
+- If query is conversational or general knowledge → use 'general'
 
 Return ONLY valid JSON:
 
@@ -186,7 +306,10 @@ User question:
     try:
         plan = json.loads(raw)
     except Exception:
-        plan = {"source": "crm", "query": user_query, "visualize": False}
+        if is_b2b_query(user_query):
+            plan = {"source": "b2b_accounts", "query": user_query, "visualize": False}
+        else:
+            plan = {"source": "crm", "query": user_query, "visualize": False}
 
     if plan.get("source") == "b2b":
         plan["source"] = "b2b_accounts"
@@ -269,7 +392,7 @@ User question:
     except Exception as e:
         results["error"] = str(e)
 
-    results_str = json.dumps(results)
+    results_str = json.dumps(sanitize_for_json(results))
     if len(results_str) > 30000:
         results_str = results_str[:30000] + "... [truncated]"
 
@@ -307,5 +430,5 @@ Data:
 
     return {
         "answer": response_text,
-        "visual_data": visual_data
+        "visual_data": sanitize_for_json(visual_data),
     }

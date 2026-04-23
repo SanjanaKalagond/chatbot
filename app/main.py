@@ -1,6 +1,8 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from app.llm.orchestrator import process_complex_query
+from app.json_sanitize import sanitize_for_json
 from app.config import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, S3_BUCKET_NAME
 import boto3
 import shutil
@@ -10,6 +12,14 @@ import numpy as np
 from datetime import datetime
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 session_index = None
 session_metadata = []
@@ -33,8 +43,14 @@ class SaveInteractionRequest(BaseModel):
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
-    result = process_complex_query(req.question, req.history, None, session_index, session_metadata)
-    return result
+    try:
+        result = process_complex_query(req.question, req.history, None, session_index, session_metadata)
+        return sanitize_for_json(result)
+    except Exception as e:
+        return sanitize_for_json({
+            "answer": f"An error occurred: {str(e)}",
+            "visual_data": None
+        })
 
 @app.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
@@ -119,3 +135,7 @@ async def clear_session_docs():
     last_uploaded_filename = None
     last_uploaded_bytes = None
     return {"status": "cleared"}
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
