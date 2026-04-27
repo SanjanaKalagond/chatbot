@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 import os
 API_URL = os.getenv("API_URL","http://localhost:8000")
+#API_URL = os.getenv("API_URL","http://fastapi:8000")
 
 st.set_page_config(
     page_title="SF Chatbot",
@@ -22,23 +23,27 @@ with st.sidebar:
         st.caption("Show me accounts by industry")
         st.caption("Top 10 opportunities by amount")
         st.caption("Open cases by priority")
+        st.caption("List all the purchases in the month of November 2023")
+        st.caption("Show me monthly order trends for 2024")
+        st.caption("List the orders installed last 3 months")
     with st.expander("B2B Accounts", expanded=False):
         st.caption("How many B2B accounts per billing country?")
-        st.caption("List B2B accounts in the Technology industry")
         st.caption("Top 15 B2B accounts by annual revenue")
         st.caption("B2B accounts modified in the last 90 days")
         st.caption("B2B accounts with a parent account (hierarchy)")
     with st.expander("Transcripts", expanded=False):
+        st.caption("Compare positive vs negative sentiment by month")
         st.caption("List customers with negative sentiment")
         st.caption("Sentiment breakdown by month")
     with st.expander("Documents", expanded=False):
-        st.markdown("RAG over ingested Salesforce documents + session uploads.")
+        st.markdown("RAG over ingested Salesforce and uploaded documents.")
     with st.expander("Hybrid", expanded=False):
         st.markdown("Joins **CRM and/or b2b_accounts** with **transcripts** (e.g. sentiment + revenue).")
         st.caption("Industries with the most negative sentiment")
     with st.expander("General", expanded=False):
         st.markdown("Definitions, strategy, Customer Information.")
-        st.caption("Tell me about Larry Fox")
+        st.caption("Customer profile")
+        st.caption("Suggest ways to prevent customer dissatisfaction")
     st.markdown("---")
     st.markdown("**Upload a Document**")
     if "uploader_key" not in st.session_state:
