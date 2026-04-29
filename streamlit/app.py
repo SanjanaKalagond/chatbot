@@ -2,9 +2,9 @@ import streamlit as st
 import requests
 import pandas as pd
 import os
-API_URL = os.getenv("API_URL","http://localhost:8000")
-#API_URL = os.getenv("API_URL","http://fastapi:8000")
 
+API_URL = os.getenv("API_URL", "http://localhost:8000")
+#API_URL = os.getenv("API_URL", "http://fastapi:8000")
 st.set_page_config(
     page_title="SF Chatbot",
     page_icon="",
@@ -23,60 +23,85 @@ with st.sidebar:
         st.caption("Show me accounts by industry")
         st.caption("Top 10 opportunities by amount")
         st.caption("Open cases by priority")
-        st.caption("List all the purchases in the month of November 2023")
-        st.caption("Show me monthly order trends for 2024")
-        st.caption("List the orders installed last 3 months")
     with st.expander("B2B Accounts", expanded=False):
         st.caption("How many B2B accounts per billing country?")
+        st.caption("List B2B accounts in the Technology industry")
         st.caption("Top 15 B2B accounts by annual revenue")
         st.caption("B2B accounts modified in the last 90 days")
         st.caption("B2B accounts with a parent account (hierarchy)")
     with st.expander("Transcripts", expanded=False):
-        st.caption("Compare positive vs negative sentiment by month")
         st.caption("List customers with negative sentiment")
         st.caption("Sentiment breakdown by month")
     with st.expander("Documents", expanded=False):
-        st.markdown("RAG over ingested Salesforce and uploaded documents.")
+        st.markdown("RAG over ingested Salesforce documents + session uploads.")
     with st.expander("Hybrid", expanded=False):
         st.markdown("Joins **CRM and/or b2b_accounts** with **transcripts** (e.g. sentiment + revenue).")
         st.caption("Industries with the most negative sentiment")
     with st.expander("General", expanded=False):
         st.markdown("Definitions, strategy, Customer Information.")
-        st.caption("Customer profile")
-        st.caption("Suggest ways to prevent customer dissatisfaction")
+        st.caption("Tell me about Larry Fox")
     st.markdown("---")
     st.markdown("**Upload a Document**")
+    
     if "uploader_key" not in st.session_state:
         st.session_state.uploader_key = 0
+    
     uploaded_file = st.file_uploader(
-        "Upload PDF or Word doc",
-        type=["pdf", "docx", "txt"],
-        help="Upload a document to query against",
+        "Upload PDF, Word, or Text document",
+        type=["pdf", "docx", "txt", "doc", "ppt", "pptx", "xls", "xlsx"],
+        help="Upload a document to query against (Max 10MB)",
         key=f"doc_uploader_{st.session_state.uploader_key}",
+        accept_multiple_files=False
     )
+    
     if uploaded_file:
-        with st.spinner("Uploading..."):
-            try:
-                files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
-                response = requests.post(f"{API_URL}/upload", files=files, timeout=60)
-                if response.status_code == 200:
-                    st.success(f"Uploaded: {uploaded_file.name}")
-                    st.session_state.doc_uploaded = True
-                else:
-                    st.error("Upload failed.")
-            except requests.exceptions.ConnectionError:
-                st.error("Cannot connect to backend.")
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
+        file_size_mb = len(uploaded_file.getvalue()) / (1024 * 1024)
+        
+        if file_size_mb > 10:
+            st.error(f"File too large: {file_size_mb:.2f}MB. Maximum is 10MB.")
+        else:
+            with st.spinner(f"Uploading {uploaded_file.name} ({file_size_mb:.2f}MB)..."):
+                try:
+                    files = {
+                        "file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)
+                    }
+                    
+                    response = requests.post(
+                        f"{API_URL}/upload",
+                        files=files,
+                        timeout=120
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        st.success(f"Uploaded: {uploaded_file.name}")
+                        st.info(f"Extracted {result.get('chunks', 0)} text chunks")
+                        st.session_state.doc_uploaded = True
+                    elif response.status_code == 400:
+                        error_detail = response.json().get("detail", "Upload failed")
+                        st.error(f"{error_detail}")
+                    elif response.status_code == 429:
+                        st.error("Too many uploads. Please wait a moment.")
+                    else:
+                        st.error(f"Upload failed with status {response.status_code}")
+                        
+                except requests.exceptions.Timeout:
+                    st.error("⏱Upload timeout. File may be too large or server is busy.")
+                except requests.exceptions.ConnectionError:
+                    st.error("Cannot connect to backend. Check if server is running.")
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+    
     if st.button("Clear Chat"):
         st.session_state.messages = []
         st.session_state.doc_uploaded = False
         st.rerun()
+    
     if st.button("Clear Session Documents"):
         try:
             requests.post(f"{API_URL}/clear_session_docs", timeout=10)
             st.session_state.doc_uploaded = False
-            st.session_state.uploader_key += 1  
+            st.session_state.uploader_key += 1
             st.success("Session document cleared. New answers will not use the uploaded file.")
             st.rerun()
         except Exception:
@@ -153,7 +178,7 @@ if prompt:
                     source = visual_data.get("source", "postgres")
 
                     if source == "customer_360":
-                        st.caption("Customer View")
+                        st.caption("Customer 360 View")
                     elif source == "salesforce_live":
                         st.caption("Data fetched live from Salesforce: syncing to database in background")
                     elif source == "not_found":
@@ -190,7 +215,7 @@ if prompt:
                             st.error(f"Error: {str(e)}")
 
             except requests.exceptions.ConnectionError:
-                answer = "Cannot connect to backend. Make sure FastAPI is running on port 8000."
+                answer = "🔌 Cannot connect to backend. Make sure FastAPI is running on port 8000."
                 visual_data = None
                 st.error(answer)
 

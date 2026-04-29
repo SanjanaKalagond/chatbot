@@ -29,12 +29,14 @@ def _serialize_numeric_df(df):
 def get_transcripts_by_sentiment(sentiment, limit=20):
     sql = """
     SELECT
+        t.id,
         t.customer_id,
         c.first_name,
         c.last_name,
         t.subject,
         t.description,
         t.sentiment,
+        t.object_type,
         t.last_modified
     FROM transcripts t
     LEFT JOIN contact c ON t.customer_id = c.id
@@ -53,6 +55,7 @@ def get_transcripts_by_sentiment(sentiment, limit=20):
 def get_customer_conversations(customer_id, limit=20):
     sql = """
     SELECT
+        t.id,
         t.subject,
         t.description,
         t.sentiment,
@@ -137,6 +140,7 @@ def get_sentiment_by_month():
 def get_customers_with_sentiment_and_revenue(sentiment, limit=20):
     sql = """
     SELECT
+        c.id,
         c.first_name,
         c.last_name,
         c.email,
@@ -148,7 +152,7 @@ def get_customers_with_sentiment_and_revenue(sentiment, limit=20):
     LEFT JOIN opportunity o ON o.account_id = c.account_id
     WHERE UPPER(t.sentiment) = UPPER(:sentiment)
     AND o.amount IS NOT NULL
-    GROUP BY c.first_name, c.last_name, c.email, t.sentiment
+    GROUP BY c.id, c.first_name, c.last_name, c.email, t.sentiment
     ORDER BY total_revenue DESC NULLS LAST
     LIMIT :limit
     """
@@ -174,6 +178,7 @@ def get_customers_with_sentiment_and_revenue(sentiment, limit=20):
 def get_customers_by_interaction_count(sentiment, min_count=5, limit=20):
     sql = """
     SELECT
+        c.id,
         c.first_name,
         c.last_name,
         c.email,
@@ -183,7 +188,7 @@ def get_customers_by_interaction_count(sentiment, min_count=5, limit=20):
     LEFT JOIN contact c ON t.customer_id = c.id
     WHERE UPPER(t.sentiment) = UPPER(:sentiment)
     AND t.customer_id IS NOT NULL
-    GROUP BY c.first_name, c.last_name, c.email, t.sentiment
+    GROUP BY c.id, c.first_name, c.last_name, c.email, t.sentiment
     HAVING COUNT(t.id) > :min_count
     ORDER BY interactions DESC
     LIMIT :limit
@@ -203,12 +208,14 @@ def get_customers_by_interaction_count(sentiment, min_count=5, limit=20):
 def search_transcripts(keyword, limit=20):
     sql = """
     SELECT
+        t.id,
         t.customer_id,
         c.first_name,
         c.last_name,
         t.subject,
         t.description,
         t.sentiment,
+        t.object_type,
         t.last_modified
     FROM transcripts t
     LEFT JOIN contact c ON t.customer_id = c.id
@@ -229,6 +236,7 @@ def get_transcript_by_name(name):
     if len(parts) >= 2:
         sql = """
         SELECT
+            t.id,
             t.subject,
             t.description,
             t.sentiment,
@@ -252,9 +260,11 @@ def get_transcript_by_name(name):
 def get_voicemail_transcripts(limit=20):
     sql = """
     SELECT
+        t.id,
         t.subject,
         t.description,
         t.sentiment,
+        t.object_type,
         c.first_name,
         c.last_name,
         t.last_modified
@@ -295,9 +305,11 @@ def get_common_subjects(limit=20):
 def get_sample_transcripts(limit=5):
     sql = """
     SELECT
+        t.id,
         t.subject,
         t.description,
         t.sentiment,
+        t.object_type,
         c.first_name,
         c.last_name,
         t.last_modified
@@ -313,6 +325,45 @@ def get_sample_transcripts(limit=5):
         columns = list(result.keys())
     df = pd.DataFrame(rows, columns=columns)
     return _serialize_df(df)
+
+
+def get_transcripts_for_customer_name(customer_name, limit=20):
+    parts = customer_name.strip().split()
+    
+    if len(parts) >= 2:
+        first_name = parts[0]
+        last_name = parts[-1]
+        
+        sql = """
+        SELECT
+            t.id,
+            t.subject,
+            t.description,
+            t.sentiment,
+            t.object_type,
+            t.last_modified,
+            c.first_name,
+            c.last_name
+        FROM transcripts t
+        LEFT JOIN contact c ON t.customer_id = c.id
+        WHERE c.first_name ILIKE :first AND c.last_name ILIKE :last
+        ORDER BY t.last_modified DESC
+        LIMIT :limit
+        """
+        
+        with engine.connect() as conn:
+            result = conn.execute(text(sql), {
+                "first": first_name,
+                "last": last_name,
+                "limit": limit
+            })
+            rows = result.fetchall()
+            columns = list(result.keys())
+        
+        df = pd.DataFrame(rows, columns=columns)
+        return _serialize_df(df)
+    
+    return []
 
 
 def handle_transcript_query(question):
@@ -342,8 +393,15 @@ def handle_transcript_query(question):
     if "common subject" in q or "frequent subject" in q or "most common" in q:
         return get_common_subjects()
 
+    if ("list transcripts" in q or "show transcripts" in q or "transcripts of" in q or "transcripts for" in q):
+        for trigger in ["of ", "for "]:
+            if trigger in q:
+                name_part = q.split(trigger)[-1].strip()
+                if len(name_part.split()) >= 2:
+                    return get_transcripts_for_customer_name(name_part.title())
+    
     if "display" in q or "conversation" in q or "transcript of" in q:
-        for trigger in ["with :", "with:", "for :", "for:", "of :", "of:"]:
+        for trigger in ["with ", "for ", "of "]:
             if trigger in q:
                 name_part = q.split(trigger)[-1].strip().split("\n")[0].strip()
                 name_part = name_part.split(":")[0].strip()
