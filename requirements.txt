@@ -18,3 +18,4 @@ pytesseract
 Pillow
 python-magic
 boto3
+itsdangerous
