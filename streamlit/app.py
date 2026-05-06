@@ -11,6 +11,39 @@ st.set_page_config(
     layout="wide"
 )
 
+
+def post_with_api_fallback(path: str, **kwargs):
+    """
+    Try both plain and /api-prefixed endpoint variants.
+    This keeps UI resilient across different ALB/API path routing setups.
+    """
+    base_url = API_URL.rstrip("/")
+    normalized_path = path if path.startswith("/") else f"/{path}"
+
+    candidate_urls = []
+    if base_url.endswith("/api"):
+        candidate_urls.append(f"{base_url}{normalized_path}")
+        candidate_urls.append(f"{base_url[:-4]}{normalized_path}")
+    else:
+        candidate_urls.append(f"{base_url}{normalized_path}")
+        candidate_urls.append(f"{base_url}/api{normalized_path}")
+
+    seen = set()
+    unique_urls = []
+    for url in candidate_urls:
+        if url not in seen:
+            seen.add(url)
+            unique_urls.append(url)
+
+    last_response = None
+    for url in unique_urls:
+        response = requests.post(url, **kwargs)
+        last_response = response
+        if response.status_code != 404:
+            return response
+
+    return last_response
+
 with st.sidebar:
     st.title("SF Chatbot")
     st.markdown("---")
@@ -73,8 +106,8 @@ with st.sidebar:
                         "file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)
                     }
                     
-                    response = requests.post(
-                        f"{API_URL}/upload",
+                    response = post_with_api_fallback(
+                        "/upload",
                         files=files,
                         timeout=120
                     )
@@ -106,7 +139,7 @@ with st.sidebar:
     
     if st.button("Clear Session Documents"):
         try:
-            requests.post(f"{API_URL}/clear_session_docs", timeout=10)
+            post_with_api_fallback("/clear_session_docs", timeout=10)
             st.session_state.doc_uploaded = False
             st.session_state.uploader_key += 1
             st.success("Session document cleared. New answers will not use the uploaded file.")
@@ -166,8 +199,8 @@ if prompt:
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                response = requests.post(
-                    f"{API_URL}/chat",
+                response = post_with_api_fallback(
+                    "/chat",
                     json={
                         "question": prompt,
                         "history": []
@@ -205,8 +238,8 @@ if prompt:
                 if st.session_state.doc_uploaded:
                     if st.button("Save this interaction"):
                         try:
-                            save_response = requests.post(
-                                f"{API_URL}/save_interaction",
+                            save_response = post_with_api_fallback(
+                                "/save_interaction",
                                 json={
                                     "question": st.session_state.last_question,
                                     "answer": st.session_state.last_answer

@@ -65,3 +65,6 @@ Thumbs.db
 .coverage
 htmlcov/*.pem
 *.pem
+
+aws/
+awscliv2.zip

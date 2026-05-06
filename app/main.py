@@ -85,6 +85,7 @@ async def add_security_headers(request: Request, call_next):
     return response
 
 @app.post("/chat")
+@app.post("/api/chat")
 async def chat(req: ChatRequest, request: Request):
     client_ip = request.client.host
     
@@ -104,6 +105,7 @@ async def chat(req: ChatRequest, request: Request):
         })
 
 @app.post("/upload")
+@app.post("/api/upload")
 async def upload_document(file: UploadFile = File(...), request: Request = None):
     global session_index, session_metadata, last_uploaded_filename, last_uploaded_bytes
     
@@ -166,6 +168,7 @@ async def upload_document(file: UploadFile = File(...), request: Request = None)
             os.remove(tmp_path)
 
 @app.post("/save_interaction")
+@app.post("/api/save_interaction")
 async def save_interaction(req: SaveInteractionRequest, request: Request = None):
     global last_uploaded_filename, last_uploaded_bytes
     
@@ -202,6 +205,7 @@ async def save_interaction(req: SaveInteractionRequest, request: Request = None)
         return {"status": "error", "detail": str(e)}
 
 @app.post("/clear_session_docs")
+@app.post("/api/clear_session_docs")
 async def clear_session_docs(request: Request = None):
     global session_index, session_metadata, last_uploaded_filename, last_uploaded_bytes
     
@@ -216,5 +220,6 @@ async def clear_session_docs(request: Request = None):
     return {"status": "cleared"}
 
 @app.get("/health")
+@app.get("/api/health")
 async def health():
     return {"status": "healthy"}

@@ -59,6 +59,7 @@ def sync_crm_object(object_name, access_token, instance_url):
     sys.stdout.flush()
 
     total = 0
+    changed = []
 
     for batch in run_query_stream(instance_url, access_token, soql):
         rows = []
@@ -71,6 +72,7 @@ def sync_crm_object(object_name, access_token, instance_url):
                 "data": r,
                 "last_modified": parse_sf_datetime(r.get("LastModifiedDate"))
             })
+            changed.append(r)
         if rows:
             with engine.begin() as conn:
                 stmt = insert(salesforce_objects).values(rows)
@@ -86,6 +88,7 @@ def sync_crm_object(object_name, access_token, instance_url):
             print(f"{object_name}: {total} records synced")
             sys.stdout.flush()
 
+    _upsert_typed_rows(object_name, changed)
     set_last_sync(object_name, datetime.utcnow())
     print(f"Finished {object_name}: {total} new/updated records")
 
@@ -446,25 +449,6 @@ def run_incremental_sync():
     for obj in CRM_OBJECTS:
         try:
             sync_crm_object(obj, access_token, instance_url)
-
-            last_sync = get_last_sync(obj)
-            field_map = {
-                "Account": "Id, Name, Industry, Phone, BillingCity, BillingCountry, LastModifiedDate",
-                "Contact": "Id, FirstName, LastName, Email, Phone, AccountId, LastModifiedDate",
-                "Opportunity": "Id, Name, Amount, StageName, CloseDate, AccountId, LastModifiedDate",
-                "Case": "Id, Subject, Status, Priority, AccountId, LastModifiedDate",
-                "Order": "Id, WC_Order_ID__c, AccountId, EffectiveDate, Status, LastModifiedDate",
-                "OrderItem": "Id, OrderId, Quantity, UnitPrice, TotalPrice, LastModifiedDate",
-            }
-            fields = field_map.get(obj, "Id, LastModifiedDate")
-            soql = f"SELECT {fields} FROM {obj}"
-            if last_sync:
-                sync_str = last_sync.strftime("%Y-%m-%dT%H:%M:%SZ")
-                soql += f" WHERE LastModifiedDate > {sync_str}"
-            changed = []
-            for batch in run_query_stream(instance_url, access_token, soql):
-                changed.extend(batch)
-            _upsert_typed_rows(obj, changed)
         except Exception as e:
             print(f"Error syncing {obj}: {str(e)}")
         sys.stdout.flush()
