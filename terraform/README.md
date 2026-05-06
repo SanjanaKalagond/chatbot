@@ -1,90 +1,43 @@
-# Terraform Foundation for Chatbot
+# Terraform Deployment
 
-This Terraform stack creates a practical foundation to run your chatbot on AWS:
-
-- VPC + public subnets + internet gateway
-- ECS Fargate cluster
-- ALB with path-based routing (`/api*`, `/docs*` to API; default to UI)
-- ECR repositories for `api`, `ui`, and `sync`
-- Scheduled sync task via EventBridge
-- Optional Route53 alias record
+Deploy the Salesforce chatbot infrastructure on AWS.
 
 ## Prerequisites
 
-- Terraform `>= 1.5`
-- AWS CLI configured for the target account
-- Permission to create VPC, ECS, ECR, ALB, IAM, Route53, CloudWatch resources
+- AWS CLI configured with company credentials
+- Docker images built and pushed to ECR
+- `.env` file configured with company resources
 
-## 1) Initialize variables
-
-From `terraform/`:
+## Deploy
 
 ```bash
-cp terraform.tfvars.example terraform.tfvars
-```
+cd terraform
 
-Edit `terraform.tfvars` and set:
-
-- `api_image`, `ui_image`, `sync_image` (image URIs)
-- optional `domain_name`, `hosted_zone_id` for Route53
-
-## 2) Deploy base infrastructure
-
-```bash
 terraform init
+terraform validate
 terraform plan
 terraform apply
 ```
 
-If images are not available yet in ECR, temporarily use public placeholder images, deploy infra, then update image URIs and re-apply.
-
-## 3) Build and push images
-
-After first apply, get ECR repo URLs:
+## Outputs
 
 ```bash
-terraform output api_ecr_repository_url
-terraform output ui_ecr_repository_url
-terraform output sync_ecr_repository_url
+terraform output
 ```
 
-Then build and push your three images (from repository root):
+## Access
 
-```bash
-aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin <account>.dkr.ecr.ap-south-1.amazonaws.com
-docker build -t <api_repo_url>:latest -f dockerfile .
-docker push <api_repo_url>:latest
+**Frontend**: `http://<alb_dns_name>/`  
+**Backend**: `http://<alb_dns_name>/docs`
 
-docker build -t <ui_repo_url>:latest -f dockerfile.streamlit .
-docker push <ui_repo_url>:latest
+Example:
+- Frontend: http://tonal-chatbot-dev-alb-1490346913.ap-south-1.elb.amazonaws.com/
+- Backend: http://tonal-chatbot-dev-alb-1490346913.ap-south-1.elb.amazonaws.com/docs
 
-docker build -t <sync_repo_url>:latest -f dockerfile .
-docker push <sync_repo_url>:latest
-```
+## Update
 
-Update `terraform.tfvars` image values if needed, then:
+After code changes, rebuild images, push to ECR, then:
 
 ```bash
 terraform apply
 ```
-
-## 4) Access
-
-- UI and API are available on ALB DNS from:
-
-```bash
-terraform output alb_dns_name
-```
-
-- API routes use ALB path forwarding:
-  - `http://<alb_dns>/api...`
-  - `http://<alb_dns>/docs`
-
-## Notes
-
-- This is intentionally a strong starter foundation for migration speed.
-- For production hardening, add:
-  - HTTPS (`aws_acm_certificate` + `443` listener)
-  - private subnets + NAT
-  - autoscaling policies
-  - Secrets Manager integration for env vars
