@@ -30,10 +30,6 @@ terraform output
 **Frontend**: `http://<alb_dns_name>/`  
 **Backend**: `http://<alb_dns_name>/docs`
 
-Example:
-- Frontend: http://tonal-chatbot-dev-alb-1490346913.ap-south-1.elb.amazonaws.com/
-- Backend: http://tonal-chatbot-dev-alb-1490346913.ap-south-1.elb.amazonaws.com/docs
-
 ## Update
 
 After code changes, rebuild images, push to ECR, then:
