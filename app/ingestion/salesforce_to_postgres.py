@@ -7,11 +7,10 @@ from app.database.schema import salesforce_objects
 from app.salesforce.objects import CRM_OBJECTS
 from app.salesforce.extractor import extract_object_soql
 from app.salesforce.bulk_client import run_query_stream
-from app.salesforce.auth import get_salesforce_token  # Added missing import
+from app.salesforce.auth import get_salesforce_token  
 from app.database.sync_metadata import set_last_sync
 
 def ingest_crm_object(object_name):
-    # Get the SOQL string from extractor
     soql = extract_object_soql(object_name) 
     access_token, instance_url = get_salesforce_token()
     
@@ -19,8 +18,6 @@ def ingest_crm_object(object_name):
     sys.stdout.flush()
     
     total_count = 0
-
-    # Stream batches from Salesforce and upsert immediately to keep RAM low
     for batch in run_query_stream(instance_url, access_token, soql):
         rows = []
         for r in batch:
@@ -49,7 +46,6 @@ def ingest_crm_object(object_name):
             print(f"RDS Update: {total_count} total records saved for {object_name}")
             sys.stdout.flush()
     
-    # Track the sync time for the next incremental run
     set_last_sync(object_name, datetime.utcnow())
     print(f"Finished ingestion for {object_name}. Total: {total_count}")
 

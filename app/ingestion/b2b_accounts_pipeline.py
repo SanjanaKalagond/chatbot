@@ -1,12 +1,3 @@
-"""
-Ingest Salesforce Account records where RecordType.DeveloperName = 'Business_Account'.
-
-Uses sync_metadata.object_name = 'Account_B2B' for incremental cursor, independent of
-the generic Account ingest in salesforce_to_postgres / incremental_sync.
-
-Rows are upserted on Salesforce Id (primary key): re-running ingestion updates existing
-rows instead of creating duplicates. Incremental runs only query LastModifiedDate > cursor.
-"""
 from __future__ import annotations
 
 import sys

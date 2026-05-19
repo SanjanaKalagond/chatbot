@@ -25,3 +25,62 @@ hosted_zone_id = ""
 common_tags = {
   Owner = "tonal"
 }
+
+
+
+#project_name = "tonal-chatbot"
+#environment  = "dev"
+#aws_region   = "ap-south-1"
+
+#vpc_cidr            = "10.30.0.0/16"
+#public_subnet_cidrs = ["10.30.1.0/24", "10.30.2.0/24"]
+
+# Replace these with real ECR image URIs after first apply/build.
+#api_image  = "544433947689.dkr.ecr.ap-south-1.amazonaws.com/tonal-chatbot-dev-api:latest"
+
+#ui_image   = "544433947689.dkr.ecr.ap-south-1.amazonaws.com/tonal-chatbot-dev-ui:latest"
+
+#sync_image = "544433947689.dkr.ecr.ap-south-1.amazonaws.com/tonal-chatbot-dev-sync:latest"
+
+#api_desired_count = 1
+#ui_desired_count  = 1
+
+#sync_enabled             = true
+#sync_schedule_expression = "rate(30 minutes)"
+#enable_alb               = false
+#alb_resource_suffix      = "v2"
+#ecs_assign_public_ip     = true
+#ui_api_url               = "http://localhost:8000"
+
+# Optional Route53 alias. Leave empty strings to skip DNS record creation.
+#domain_name    = ""
+#hosted_zone_id = ""
+#alb_certificate_arn   = ""
+#redirect_http_to_https = true
+
+# Optional Cognito managed login domains.
+# Prefix domain should be only the prefix, not the full URL.
+#cognito_user_pool_id         = ""
+#cognito_prefix_domain        = ""
+#cognito_custom_domain        = ""
+#cognito_certificate_arn      = ""
+#cognito_custom_domain_zone_id = ""
+
+#common_tags = {
+#  Owner = "tonal"
+#}
+
+# Keep secrets in a separate file (for example: secrets.tfvars) and pass it
+# with: terraform apply -var-file="terraform.tfvars" -var-file="secrets.tfvars"
+#
+# aws_access_key_id     = ""
+# aws_secret_access_key = ""
+# database_url          = ""
+# s3_bucket_name        = ""
+# faiss_bucket_name     = ""
+# gemini_api_key        = ""
+# salesforce_client_id     = ""
+# salesforce_client_secret = ""
+# salesforce_username      = ""
+# salesforce_password      = ""
+# salesforce_access_token  = ""

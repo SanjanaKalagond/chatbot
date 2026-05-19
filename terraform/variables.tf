@@ -1,140 +1,263 @@
 variable "project_name" {
-  description = "Project prefix used for naming resources."
+  description = "Project name"
   type        = string
-  default     = "tonal-chatbot"
 }
 
 variable "environment" {
-  description = "Environment name (dev, staging, prod)."
+  description = "Environment name"
   type        = string
-  default     = "dev"
 }
 
 variable "aws_region" {
-  description = "AWS region for deployment."
+  description = "AWS region"
   type        = string
-  default     = "ap-south-1"
 }
 
 variable "vpc_cidr" {
-  description = "CIDR block for VPC."
+  description = "VPC CIDR block"
   type        = string
-  default     = "10.30.0.0/16"
 }
 
 variable "public_subnet_cidrs" {
-  description = "CIDR blocks for public subnets (at least 2)."
+  description = "Public subnet CIDRs"
   type        = list(string)
-  default     = ["10.30.1.0/24", "10.30.2.0/24"]
 }
 
-variable "api_container_port" {
-  description = "Port used by FastAPI container."
-  type        = number
-  default     = 8000
+variable "api_image" {
+  description = "API container image"
+  type        = string
 }
 
-variable "ui_container_port" {
-  description = "Port used by Streamlit container."
-  type        = number
-  default     = 8501
+variable "ui_image" {
+  description = "UI container image"
+  type        = string
 }
 
-variable "api_cpu" {
-  description = "Fargate CPU units for API task."
-  type        = number
-  default     = 512
+variable "ui_api_url" {
+  description = "Base URL that the UI service uses to call the API"
+  type        = string
+  default     = "http://localhost:8000"
 }
 
-variable "api_memory" {
-  description = "Fargate memory (MB) for API task."
-  type        = number
-  default     = 1024
+variable "enable_alb" {
+  description = "Enable ALB, listeners, target groups, and ECS service LB attachment"
+  type        = bool
+  default     = false
 }
 
-variable "ui_cpu" {
-  description = "Fargate CPU units for UI task."
-  type        = number
-  default     = 512
+variable "alb_resource_suffix" {
+  description = "Suffix used for ALB resource names to avoid clashes with old ALB stack"
+  type        = string
+  default     = "v2"
 }
 
-variable "ui_memory" {
-  description = "Fargate memory (MB) for UI task."
-  type        = number
-  default     = 1024
+variable "ecs_assign_public_ip" {
+  description = "Assign public IP to ECS service tasks (set false only with private subnets + NAT)"
+  type        = bool
+  default     = true
 }
 
-variable "sync_cpu" {
-  description = "Fargate CPU units for sync task."
-  type        = number
-  default     = 512
-}
-
-variable "sync_memory" {
-  description = "Fargate memory (MB) for sync task."
-  type        = number
-  default     = 1024
+variable "sync_image" {
+  description = "Sync container image"
+  type        = string
 }
 
 variable "api_desired_count" {
-  description = "Desired number of API tasks."
+  description = "API ECS desired task count"
   type        = number
   default     = 1
 }
 
 variable "ui_desired_count" {
-  description = "Desired number of UI tasks."
+  description = "UI ECS desired task count"
   type        = number
   default     = 1
 }
 
-variable "api_image" {
-  description = "Container image URI for API service."
-  type        = string
-}
-
-variable "ui_image" {
-  description = "Container image URI for UI service."
-  type        = string
-}
-
-variable "sync_image" {
-  description = "Container image URI for sync task."
-  type        = string
-}
-
-variable "sync_schedule_expression" {
-  description = "EventBridge schedule for sync task."
-  type        = string
-  default     = "rate(30 minutes)"
-}
-
 variable "sync_enabled" {
-  description = "Enable scheduled sync task."
+  description = "Enable scheduled sync task"
   type        = bool
   default     = true
 }
 
-variable "health_check_path" {
-  description = "Health check path for API target group."
+variable "sync_schedule_expression" {
+  description = "EventBridge schedule for sync"
   type        = string
-  default     = "/docs"
 }
 
 variable "domain_name" {
-  description = "Root DNS name (example: chatbot.tonal.com). Leave empty to skip Route53 records."
+  description = "Optional custom domain"
   type        = string
   default     = ""
 }
 
 variable "hosted_zone_id" {
-  description = "Route53 hosted zone ID where domain_name record should be created. Leave empty to skip."
+  description = "Optional Route53 hosted zone ID"
   type        = string
   default     = ""
 }
 
+variable "alb_certificate_arn" {
+  description = "ACM certificate ARN in the ALB region for HTTPS listener"
+  type        = string
+  default     = ""
+}
+
+variable "redirect_http_to_https" {
+  description = "Redirect HTTP traffic on ALB to HTTPS when certificate is configured"
+  type        = bool
+  default     = true
+}
+
 variable "common_tags" {
-  description = "Additional tags for all resources."
+  description = "Common tags applied to resources"
   type        = map(string)
   default     = {}
+}
+
+variable "aws_access_key_id" {
+  description = "AWS Access Key ID for application"
+  type        = string
+  sensitive   = true
+}
+
+variable "aws_secret_access_key" {
+  description = "AWS Secret Access Key for application"
+  type        = string
+  sensitive   = true
+}
+
+variable "database_url" {
+  description = "PostgreSQL database connection URL"
+  type        = string
+  sensitive   = true
+}
+
+variable "s3_bucket_name" {
+  description = "S3 bucket name for documents"
+  type        = string
+}
+
+variable "faiss_bucket_name" {
+  description = "S3 bucket name for FAISS index"
+  type        = string
+}
+
+variable "gemini_api_key" {
+  description = "Google Gemini API key"
+  type        = string
+  sensitive   = true
+}
+
+variable "salesforce_client_id" {
+  description = "Salesforce OAuth client ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "salesforce_client_secret" {
+  description = "Salesforce OAuth client secret"
+  type        = string
+  sensitive   = true
+}
+
+variable "salesforce_username" {
+  description = "Salesforce username"
+  type        = string
+  sensitive   = true
+}
+
+variable "salesforce_password" {
+  description = "Salesforce password"
+  type        = string
+  sensitive   = true
+}
+
+variable "salesforce_access_token" {
+  description = "Salesforce access token"
+  type        = string
+  sensitive   = true
+}
+
+variable "cognito_user_pool_id" {
+  description = "Cognito User Pool ID used for managed login domains"
+  type        = string
+  default     = ""
+}
+
+variable "cognito_prefix_domain" {
+  description = "Cognito service-owned domain prefix (for example: my-prefix)"
+  type        = string
+  default     = ""
+}
+
+variable "cognito_custom_domain" {
+  description = "Cognito custom domain (for example: auth.example.com)"
+  type        = string
+  default     = ""
+}
+
+variable "cognito_certificate_arn" {
+  description = "ACM certificate ARN in us-east-1 for Cognito custom domain"
+  type        = string
+  default     = ""
+}
+
+variable "cognito_custom_domain_zone_id" {
+  description = "Route53 hosted zone ID for the Cognito custom domain"
+  type        = string
+  default     = ""
+}
+variable "api_container_port" {
+  description = "API container port"
+  type        = number
+  default     = 8000
+}
+
+variable "ui_container_port" {
+  description = "UI container port"
+  type        = number
+  default     = 8501
+}
+
+variable "health_check_path" {
+  description = "Health check endpoint path"
+  type        = string
+  default     = "/health"
+}
+
+variable "api_cpu" {
+  description = "API task CPU"
+  type        = number
+  default     = 1024
+}
+
+variable "api_memory" {
+  description = "API task memory"
+  type        = number
+  default     = 2048
+}
+
+variable "ui_cpu" {
+  description = "UI task CPU"
+  type        = number
+  default     = 512
+}
+
+variable "ui_memory" {
+  description = "UI task memory"
+  type        = number
+  default     = 1024
+}
+
+variable "sync_cpu" {
+  description = "Sync task CPU"
+  type        = number
+  default     = 1024
+}
+
+variable "sync_memory" {
+  description = "Sync task memory"
+  type        = number
+  default     = 2048
 }

@@ -1,3 +1,6 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch==2.7.0+cpu
 psycopg2-binary
 pandas
 sqlalchemy
@@ -10,7 +13,6 @@ fastapi
 uvicorn
 streamlit
 transformers
-torch
 pdfplumber
 python-docx
 openpyxl
@@ -18,4 +20,3 @@ pytesseract
 Pillow
 python-magic
 boto3
-itsdangerous

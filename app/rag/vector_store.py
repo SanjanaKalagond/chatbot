@@ -1,14 +1,12 @@
 import os
-import faiss
 import pickle
-import boto3
+import faiss
 import numpy as np
-from app.config import (
-    AWS_ACCESS_KEY_ID,
-    AWS_SECRET_ACCESS_KEY,
-    AWS_REGION,
-    FAISS_BUCKET_NAME
-)
+import boto3
+from sentence_transformers import SentenceTransformer
+
+AWS_REGION = os.getenv("AWS_REGION", "ap-south-1")
+FAISS_BUCKET_NAME = os.getenv("FAISS_BUCKET_NAME")
 
 INDEX_FILE = "/tmp/index.faiss"
 META_FILE = "/tmp/meta.pkl"
@@ -17,12 +15,7 @@ FALLBACK_META = "data/faiss_index/meta.pkl"
 
 dimension = 384
 
-s3 = boto3.client(
-    "s3",
-    aws_access_key_id=AWS_ACCESS_KEY_ID,
-    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-    region_name=AWS_REGION
-)
+s3 = boto3.client("s3", region_name=AWS_REGION)
 
 def download_index():
     try:
@@ -40,29 +33,29 @@ def upload_index():
         pass
 
 def load_index():
-    if os.path.exists(INDEX_FILE) and os.path.exists(META_FILE):
+    if download_index():
         index = faiss.read_index(INDEX_FILE)
         with open(META_FILE, "rb") as f:
             metadata = pickle.load(f)
         return index, metadata
-    elif os.path.exists(FALLBACK_INDEX) and os.path.exists(FALLBACK_META):
-        index = faiss.read_index(FALLBACK_INDEX)
-        with open(FALLBACK_META, "rb") as f:
-            metadata = pickle.load(f)
-        return index, metadata
-    return faiss.IndexFlatL2(dimension), []
+    else:
+        try:
+            index = faiss.read_index(FALLBACK_INDEX)
+            with open(FALLBACK_META, "rb") as f:
+                metadata = pickle.load(f)
+            return index, metadata
+        except Exception:
+            index = faiss.IndexFlatL2(dimension)
+            metadata = []
+            return index, metadata
 
-def add_vectors(doc_id, chunks, embeddings):
-    download_index()
+def search(query: str, top_k: int = 5):
     index, metadata = load_index()
-    vectors = np.array(embeddings).astype("float32")
-    index.add(vectors)
-    for chunk in chunks:
-        metadata.append({
-            "doc_id": doc_id,
-            "text": chunk
-        })
-    faiss.write_index(index, INDEX_FILE)
-    with open(META_FILE, "wb") as f:
-        pickle.dump(metadata, f)
-    upload_index()
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+    query_vec = model.encode([query])
+    D, I = index.search(np.array(query_vec).astype("float32"), top_k)
+    results = []
+    for idx in I[0]:
+        if idx < len(metadata):
+            results.append(metadata[idx])
+    return results
