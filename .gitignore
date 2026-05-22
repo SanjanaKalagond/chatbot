@@ -72,3 +72,4 @@ awscliv2.zip
 terraform/*.tfstate*
 terraform/tfplan
 .terraform/
+terraform.tfvars
